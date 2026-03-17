@@ -7,7 +7,7 @@ LUCI_DEPENDS:=+luci-base +uqmi
 PKG_VERSION:=1.0.4
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
-PKG_MAINTAINER:=LuCI community <luci@lists.openwrt.org>
+PKG_MAINTAINER:=Coll147
 
 include $(TOPDIR)/feeds/luci/luci.mk
 
