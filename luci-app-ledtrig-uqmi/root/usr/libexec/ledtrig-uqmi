@@ -1,0 +1,44 @@
+#!/bin/sh
+# LED trigger: 4G signal via uqmi
+# LED ON  → RSSI >= threshold (good signal)
+# LED OFF → RSSI <  threshold (bad signal / no signal)
+
+LEDS_PATH="/sys/class/leds"
+DEFAULT_DEVICE="/dev/cdc-wdm0"
+DEFAULT_THRESHOLD="-80"
+DEFAULT_INTERVAL=10
+
+while true; do
+	for sec in $(uci show system 2>/dev/null | sed -n 's/^system\.\([^.=]*\)\.trigger=.*/\1/p'); do
+
+		[ "$(uci -q get system.$sec.trigger)" = "uqmi-rssi" ] || continue
+
+		sysfs=$(uci -q get system.$sec.sysfs)
+		device=$(uci -q get system.$sec.device)
+		threshold=$(uci -q get system.$sec.threshold)
+		interval=$(uci -q get system.$sec.interval)
+
+		device="${device:-$DEFAULT_DEVICE}"
+		threshold="${threshold:-$DEFAULT_THRESHOLD}"
+		interval="${interval:-$DEFAULT_INTERVAL}"
+
+		[ -d "$LEDS_PATH/$sysfs" ] || continue
+
+		# Read RSSI from modem
+		rssi=$(uqmi -d "$device" --get-signal-info 2>/dev/null \
+		       | grep -o '"rssi"[[:space:]]*:[[:space:]]*-\{0,1\}[0-9]*' \
+		       | grep -o -- '-\{0,1\}[0-9]*$')
+
+		# Switch to manual control
+		echo "none" > "$LEDS_PATH/$sysfs/trigger" 2>/dev/null
+
+		# ON if signal is good enough, OFF otherwise
+		if [ -n "$rssi" ] && [ "$rssi" -ge "$threshold" ] 2>/dev/null; then
+			echo 255 > "$LEDS_PATH/$sysfs/brightness" 2>/dev/null
+		else
+			echo 0   > "$LEDS_PATH/$sysfs/brightness" 2>/dev/null
+		fi
+	done
+
+	sleep "$DEFAULT_INTERVAL"
+done

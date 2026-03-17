@@ -1,0 +1,98 @@
+#!/bin/sh
+# LED trigger: ping target. Reads UCI system.@led[], for each with trigger=ping
+# sets LED to "none" and drives brightness by pinging the configured target.
+
+LEDS_PATH="/sys/class/leds"
+DEFAULT_INTERVAL=5
+LOG_FILE="/var/log/ledtrig-ping.log"
+
+# Log function - only log errors and important events
+log_error() {
+	echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$LOG_FILE"
+}
+
+log_info() {
+	echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >> "$LOG_FILE"
+}
+
+# Initialize log
+log_info "LED ping trigger service started"
+
+# Validate LED path exists
+if [ ! -d "$LEDS_PATH" ]; then
+	log_error "LED sysfs path $LEDS_PATH not found"
+	exit 1
+fi
+
+while true; do
+	led_found=0
+	
+	# Find all LED sections with ping trigger
+	for sec in $(uci show system 2>/dev/null | sed -n 's/^system\.\([^.=]*\)\.trigger=.*/\1/p'); do
+		# Verify this is a ping trigger
+		trigger=$(uci -q get system.$sec.trigger 2>/dev/null)
+		[ "$trigger" != "ping" ] && continue
+		
+		# Get configuration
+		sysfs=$(uci -q get system.$sec.sysfs 2>/dev/null)
+		target=$(uci -q get system.$sec.target 2>/dev/null)
+		invert=$(uci -q get system.$sec.invert 2>/dev/null)
+		interval=$(uci -q get system.$sec.interval 2>/dev/null)
+		invert=${invert:-0}
+		if [ -z "$sysfs" ]; then
+			log_error "LED section $sec: missing sysfs parameter"
+			continue
+		fi
+		
+		if [ -z "$target" ]; then
+			log_error "LED section $sec: missing target parameter"
+			continue
+		fi
+		
+		# Validate interval
+		interval=${interval:-$DEFAULT_INTERVAL}
+		if ! echo "$interval" | grep -q '^[0-9]\+$' || [ "$interval" -lt 1 ]; then
+			log_error "LED section $sec: invalid interval '$interval', using default $DEFAULT_INTERVAL"
+			interval=$DEFAULT_INTERVAL
+		fi
+		
+		# Check if LED path exists
+		if [ ! -d "$LEDS_PATH/$sysfs" ]; then
+			log_error "LED sysfs path $LEDS_PATH/$sysfs not found for section $sec"
+			continue
+		fi
+		
+		led_found=1
+		
+		# Set trigger to none (manual control)
+		if ! echo "none" > "$LEDS_PATH/$sysfs/trigger" 2>/dev/null; then
+			log_error "Failed to set trigger for LED $sysfs"
+			continue
+		fi
+		
+		# Perform ping test
+		if ping -c 1 -W 3 -q "$target" >/dev/null 2>&1; then
+			# Target reachable
+			if [ "$invert" = "1" ]; then
+				echo 0 > "$LEDS_PATH/$sysfs/brightness" 2>/dev/null
+			else
+				echo 255 > "$LEDS_PATH/$sysfs/brightness" 2>/dev/null
+			fi
+		else
+			# Target unreachable
+			if [ "$invert" = "1" ]; then
+				echo 255 > "$LEDS_PATH/$sysfs/brightness" 2>/dev/null
+			else
+				echo 0 > "$LEDS_PATH/$sysfs/brightness" 2>/dev/null
+			fi
+		fi
+	done
+	
+	# Log if no ping LEDs are configured
+	if [ $led_found -eq 0 ]; then
+		log_info "No LED ping triggers configured"
+	fi
+	
+	# Sleep for default interval
+	sleep $DEFAULT_INTERVAL
+done
