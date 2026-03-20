@@ -1,0 +1,12 @@
+[submodule "luci-theme-argon"]
+	path = luci-theme-argon
+	url = https://github.com/jerrykuku/luci-theme-argon.git
+[submodule "luci-app-argon-config"]
+	path = luci-app-argon-config
+	url = https://github.com/jerrykuku/luci-app-argon-config.git
+[submodule "openwrt-bandix"]
+	path = openwrt-bandix
+	url = https://github.com/timsaya/openwrt-bandix.git
+[submodule "luci-app-bandix"]
+	path = luci-app-bandix
+	url = https://github.com/timsaya/luci-app-bandix.git
