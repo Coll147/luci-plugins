@@ -1,4 +1,5 @@
 Some vibecoded openwrt luci plugins
+and links to other apps, so this is like a "repo"
 
 it JUST works :)
 
